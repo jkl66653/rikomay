@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物料二维码管理后台</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="icon" href="ODF.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="ODF.png">
+
+    <style>
+        :root { --primary: #409eff; --bg: #f5f7fa; --sidebar-bg: #ffffff; --card-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; }
+        body { background: var(--bg); color: #333; display: flex; min-height: 100vh; }
+        
+        .sidebar { width: 240px; background: var(--sidebar-bg); box-shadow: 2px 0 8px rgba(0,0,0,0.05); height: 100vh; position: sticky; top: 0; display: flex; flex-direction: column; flex-shrink: 0; padding: 20px 15px; z-index: 10; }
+        .sidebar-header { font-size: 18px; font-weight: 600; color: #303133; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid #ebeef5; display: flex; align-items: center; gap: 8px; }
+        .menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border-radius: 8px; cursor: pointer; color: #606266; margin-bottom: 8px; transition: 0.2s; font-size: 15px; font-weight: 500; }
+        .menu-item:hover { background: #ecf5ff; color: var(--primary); }
+        .menu-item.active { background: #ecf5ff; color: var(--primary); font-weight: bold; }
+        
+        .main-content { flex: 1; padding: 30px; max-width: calc(100% - 240px); }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+
+        .network-setting { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #f8f9fa; padding: 8px 15px; border-radius: 20px; border: 1px solid #e4e7ed; margin-bottom: 20px; }
+        .network-setting label { font-size: 13px; color: #909399; display: flex; align-items: center; gap: 5px;}
+        .network-setting input { width: 120px; padding: 4px 8px; border: 1px solid #dcdfe6; border-radius: 4px; outline: none; font-size: 13px; transition: 0.2s; }
+        .network-setting input:focus { border-color: var(--primary); }
+
+        .panel { background: #fff; border-radius: 12px; padding: 24px; box-shadow: var(--card-shadow); }
+        .panel h3 { font-size: 16px; border-left: 4px solid var(--primary); padding-left: 10px; margin-bottom: 16px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; color: #606266; font-weight: 500; margin-bottom: 6px; }
+        input[type="file"] { width: 100%; padding: 10px; border: 1px dashed #d9d9d9; background: #fafafa; border-radius: 6px; cursor: pointer; }
+        textarea { width: 100%; height: 160px; padding: 12px; border: 1px solid #dcdfe6; border-radius: 6px; resize: vertical; outline: none; font-size: 14px; }
+        textarea:focus { border-color: var(--primary); }
+        select#uniqueColumnSelect { width: 100%; padding: 8px; border: 1px solid #dcdfe6; border-radius: 4px; outline: none; background: #fff; font-size: 14px; }
+
+        .btn-box { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;}
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 15px; font-weight: 500; color: #fff; cursor: pointer; transition: 0.2s; min-width: 80px; }
+        .btn-primary { background: var(--primary); } .btn-primary:disabled { background: #a0cfff; cursor: not-allowed; }
+        .btn-outline { background: #fff; color: #606266; border: 1px solid #dcdfe6; }
+        .btn-success { background: #67c23a; } .btn-success:hover { background: #85ce61; }
+        .btn-info { background: #909399; } .btn-info:hover { background: #a6a9ad; }
+
+        .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 15px;}
+        .card { background: #fff; border-radius: 10px; padding: 15px; box-shadow: var(--card-shadow); border: 1px solid #ebeef5; display: flex; flex-direction: column; gap: 10px;}
+        .card-header { font-size: 14px; font-weight: 600; color: #303133; border-bottom: 1px dashed #eee; padding-bottom: 8px; display: flex; justify-content: space-between; }
+        .card-body { display: flex; justify-content: space-between; align-items: stretch; gap: 10px; }
+        .card-text { font-size: 12px; color: #909399; line-height: 1.6; flex: 1; word-break: break-all; }
+        .card-qr { flex-shrink: 0; } .card-qr canvas { width: 85px !important; height: 85px !important; }
+        .card-barcode-text { font-weight: 900; font-size: 16px; color: #303133; text-align: center; letter-spacing: 1px; margin-top: 0px !important; line-height: 1.1; }
+        #printContainer { display: none; }
+        @media print { body * { visibility: hidden; } #printContainer, #printContainer * { visibility: visible; } #printContainer { display: flex !important; flex-wrap: wrap; gap: 15mm; padding: 5mm; position: absolute; top:0; left:0; width:100%; background:#fff; } #printContainer img { width: 30mm !important; height: 30mm !important; page-break-inside: avoid; } }
+        @media (max-width: 768px) { body { flex-direction: column; } .sidebar { width: 100%; height: auto; position: relative; flex-direction: row; padding: 15px; overflow-x: auto;} .sidebar-header { display: none; } .menu-item { flex: 1; justify-content: center; margin: 0; } .main-content { max-width: 100%; padding: 15px; } .card-body { flex-direction: column; align-items: stretch; } }
+
+        #inventoryContainer { background:#fff; padding:20px; border-radius:12px; box-shadow:var(--card-shadow); }
+        .inventory-table-wrap { overflow-x: auto; }
+        .inv-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .inv-table th { background: #f5f7fa; color: #606266; font-weight: bold; padding: 12px; border-bottom: 1px solid #ebeef5; text-align: left; white-space: nowrap; }
+        .inv-table td { padding: 12px; border-bottom: 1px solid #ebeef5; color: #303133; }
+        .inv-table tr:hover { background: #fafafa; }
+        .row-checkbox, #selectAllCheckbox { transform: scale(1.5); cursor: pointer; margin: 0 4px; }
+
+        /* 打印 CSS 省略部分常规内容，与原版保持一致 */
+        #tablePrintContainer { display: none; }
+        @media print { body * { visibility: hidden; } #tablePrintContainer, #tablePrintContainer * { visibility: visible; } #tablePrintContainer { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 5mm 10mm; background: #fff !important; box-sizing: border-box; font-family: '微软雅黑', sans-serif; } .print-header { border-bottom: 2px solid #000 !important; padding-bottom: 12px; margin-bottom: 15px; display: flex !important; justify-content: space-between; align-items: center; } .print-header .logo { height: 40px !important; width: auto; } .print-header .title { font-size: 22px !important; font-weight: bold; letter-spacing: 2px; } .print-header .date { font-size: 12px !important; color: #606266; } .print-table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; } .print-table th, .print-table td { border: 1px solid #000 !important; padding: 6px 8px !important; text-align: left !important; } .print-table th { background: #f2f2f2 !important; font-weight: bold !important; text-align: center !important; } #tablePrintContainer .print-wrap thead { display: table-header-group !important; } #tablePrintContainer .print-wrap tfoot { display: table-footer-group !important; } #tablePrintContainer .print-wrap tbody tr { page-break-inside: avoid !important; } .print-footer { margin-top: 15px !important; padding-top: 12px !important; border-top: 2px solid #000 !important; display: flex !important; justify-content: space-between !important; font-size: 14px !important; font-weight: 500 !important; } .print-footer .f-item { flex: 1; } .print-footer .f-center { flex: 1; text-align: center; } .print-footer .f-right { flex: 1.2; text-align: right; padding-right: 70px; } @page { margin: 10mm 8mm; } }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">📋 物料管理</div>
+        <div class="menu-item active" onclick="switchTab('view-basic')">🛠️ 基础功能</div>
+        <div class="menu-item" onclick="switchTab('view-inventory')">📦 库存管理</div>
+        <div class="menu-item" onclick="switchTab('view-work-order')">📋 工单管理</div>
+    </div>
+
+    <div class="main-content">
+        <!-- 视图1：基础功能 -->
+        <div id="view-basic" class="view-section active">
+            <div class="network-setting">
+                <label>扫码链接主机IP：<input type="text" id="hostInput" style="width:200px;" value="rikomay-3s7x9jfsw-jkl16.vercel.app/" placeholder="如: rikomay.vercel.app"></label>
+                <label>端口：<input type="text" id="portInput" value="" style="width:100px;" placeholder="如:80 5500"></label>
+            </div>
+            <div class="container" style="display:flex; gap:20px; flex-wrap:wrap;">
+                <div class="panel" style="flex:1; min-width:380px;">
+                    <h3>数据录入</h3>
+                    <div class="form-group"><label>📂 上传 Excel 文件 (第一行为表头)</label><input type="file" id="fileUpload" accept=".xlsx,.xls,.csv"></div>
+                    <div class="form-group"><label>✏️ 手动粘贴数据 (Ctrl+V)</label><textarea id="dataInput" placeholder="将 Excel 数据复制粘贴到这里（按制表符分隔）"></textarea></div>
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-weight:bold; color:#333; font-size:14px;">👇 唯一标识（系统将以【入库编号】作为二维码凭证）：</label>
+                        <select id="uniqueColumnSelect"><option value="">请先加载数据...</option></select>
+                    </div>
+                    <div class="btn-box">
+                        <button id="generateBtn" class="btn btn-primary" disabled>⚡ 生成二维码</button>
+                        <button id="exportJsonBtn" class="btn btn-info">📄 导出 data.json</button>
+                        <button id="exportExcelBtn" class="btn btn-success">📥 导出 Excel</button>
+                        <button id="printBtn" class="btn btn-outline" style="flex:0.5;">🖨️ 仅打印</button>
+                    </div>
+                </div>
+                <div class="result-area" style="flex:2; min-width:500px;">
+                    <h3 style="display:flex; justify-content:space-between; align-items:center; margin-top:0;">
+                        <span>生成结果预览</span>
+                        <span style="font-size:13px; font-weight:normal; color:#909399;">二维码下方自动附带加粗入库编号</span>
+                    </h3>
+                    <div id="resultContainer" class="result-grid"></div>
+                </div>
+            </div>
+            <div id="printContainer"></div>
+        </div>
+
+        <!-- 视图2：库存管理 -->
+        <div id="view-inventory" class="view-section">
+            <div id="inventoryContainer">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 10px; margin-bottom:15px; border-bottom:1px solid #ebeef5; padding-bottom:15px;">
+                    <h4 style="border-left:4px solid var(--primary); padding-left:10px; font-size:18px;">📊 当前库存清单</h4>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="text" id="filterInput" placeholder="搜索编号..." style="padding:6px 12px; border:1px solid #dcdfe6; border-radius:4px; width:200px; outline:none; font-size:14px;">
+                        <button onclick="applyFilter()" class="btn btn-primary" style="flex:0; padding:6px 16px; font-size:14px;">🔍 筛选</button>
+                        <button onclick="clearFilter()" class="btn btn-outline" style="flex:0; padding:6px 12px; font-size:14px; background:#fff; border:1px solid #dcdfe6; color:#606266;">清除</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                        <button onclick="loadInventoryData()" class="btn btn-primary" style="flex:0; padding:8px 20px; font-size:14px;">🔄 刷新数据</button>
+                        <button onclick="printSelectedItems()" class="btn btn-success" style="flex:0; padding:8px 20px; font-size:14px;">🖨️ 打印所选</button>
+                    </div>
+                </div>
+                <div id="inventoryTableWrapper" class="inventory-table-wrap">
+                    <div style="text-align:center; color:#909399; padding:30px;">点击上方“刷新数据”按钮查看库存清单</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图3：工单管理 -->
+        <div id="view-work-order" class="view-section">
+            <div id="workOrderContainer" style="background:#fff; padding:20px; border-radius:12px; box-shadow:var(--card-shadow);">
+                <!-- 🟢 顶栏：加上了和库存管理完全一样的搜索筛选功能 -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 10px; margin-bottom:15px; border-bottom:1px solid #ebeef5; padding-bottom:15px;">
+                    <h4 style="border-left:4px solid var(--primary); padding-left:10px; font-size:18px;">📋 工单列表</h4>
+                    
+                    <!-- 搜索和筛选区（与库存管理样式一致） -->
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="text" id="woFilterInput" placeholder="搜索工单号..." style="padding:6px 12px; border:1px solid #dcdfe6; border-radius:4px; width:180px; outline:none; font-size:14px;">
+                        <button onclick="applyWoFilter()" class="btn btn-primary" style="flex:0; padding:6px 16px; font-size:14px;">🔍 筛选</button>
+                        <button onclick="clearWoFilter()" class="btn btn-outline" style="flex:0; padding:6px 12px; font-size:14px;">清除</button>
+                    </div>
+
+                    <!-- 操作按钮区（与库存管理尺寸一致） -->
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="loadWorkOrderData()" class="btn btn-primary" style="flex:0; padding:8px 20px; font-size:14px;">🔄 刷新工单</button>
+                        <button onclick="openCreateWorkOrderModal()" class="btn btn-success" style="flex:0; padding:8px 20px; font-size:14px;">➕ 新建领料工单</button>
+                    </div>
+                </div>
+                <div id="workOrderListWrapper"></div>
+            </div>
+        </div>
+
+        <div id="tablePrintContainer"></div>
+    </div>
+
+<script>
+    // ==========================================================
+    // 核心变量
+    // ==========================================================
+    let currentData = []; 
+    let currentHeaders = [];
+    let inventoryData = []; 
+    let workOrders = [];
+
+    // ==========================================================
+    // 导航切换
+    // ==========================================================
+    function switchTab(tabId) {
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.querySelector(`.menu-item[onclick*="${tabId}"]`).classList.add('active');
+        if(tabId === 'view-inventory') loadInventoryData();
+        if(tabId === 'view-work-order') loadWorkOrderData();
+    }
+
+    // ==========================================================
+    // 基础功能：数据录入
+    // ==========================================================
+    document.getElementById('fileUpload').addEventListener('change', function(e) {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
+            if(jsonData.length > 0) {
+                const headers = Object.keys(jsonData[0]);
+                document.getElementById('dataInput').value = headers.join('\t') + '\n' + jsonData.map(row => headers.map(h => row[h]).join('\t')).join('\n');
+                handleData(jsonData, headers);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    document.getElementById('dataInput').addEventListener('input', function(e) {
+        const text = e.target.value; if(!text.trim()) return;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        if(lines.length < 2) return;
+        const headers = lines[0].split('\t').map(h => h.trim());
+        const data = [];
+        for(let i=1; i<lines.length; i++) {
+            const cells = lines[i].split('\t'); let row = {};
+            headers.forEach((h, idx) => { row[h] = (cells[idx] || "").trim(); });
+            data.push(row);
+        }
+        handleData(data, headers);
+    });
+
+    function handleData(dataArray, headers) {
+        currentData = dataArray; currentHeaders = headers;
+        document.getElementById('generateBtn').disabled = false;
+        const selectEl = document.getElementById('uniqueColumnSelect');
+        selectEl.innerHTML = '';
+        headers.forEach(header => {
+            const opt = document.createElement('option');
+            opt.value = header; opt.innerText = header;
+            if (header === '入库编号') opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    // ==========================================================
+    // 基础功能：生成二维码
+    // ==========================================================
+    document.getElementById('generateBtn').addEventListener('click', function() {
+        const host = document.getElementById('hostInput').value.trim();
+        const port = document.getElementById('portInput').value.trim();
+        const uniqueCol = '入库编号';
+        if(!host) return alert("请填写正确的 Host 地址！");
+        if(currentData.length === 0) return alert("当前没有数据！");
+
+        const container = document.getElementById('resultContainer'); container.innerHTML = ''; 
+        const currentProtocol = window.location.protocol;
+        let portStr = '';
+        if (port) { if ((currentProtocol === 'http:' && port === '80') || (currentProtocol === 'https:' && port === '443')) { portStr = ''; } else { portStr = ':' + port; } }
+        const baseUrl = `https://${host}${portStr}/view.html?${encodeURIComponent(uniqueCol)}=`;
+
+        currentData.forEach((row, index) => {
+            const val = row[uniqueCol] || "N/A";
+            let qrContent = baseUrl + encodeURIComponent(val);
+
+            const card = document.createElement('div'); card.className = 'card';
+            const header = document.createElement('div'); header.className = 'card-header';
+            header.innerHTML = `<span>${val}</span><span>#${index + 1}</span>`;
+            
+            const body = document.createElement('div'); body.className = 'card-body';
+            
+            // 🟢 核心修改：彻底删除了左侧的灰色字段列表，只保留右侧容器
+            const rightContainer = document.createElement('div');
+            rightContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%;';
+            const qrDiv = document.createElement('div'); qrDiv.className = 'card-qr';
+            const qrWrap = document.createElement('div'); qrWrap.style.width = '85px'; qrWrap.style.height = '85px';
+            qrDiv.appendChild(qrWrap);
+            rightContainer.appendChild(qrDiv);
+
+            const barcodeText = document.createElement('div');
+            barcodeText.className = 'card-barcode-text';
+            barcodeText.innerText = val;
+            rightContainer.appendChild(barcodeText);
+
+            body.appendChild(rightContainer);
+            card.appendChild(header);
+            card.appendChild(body);
+            container.appendChild(card);
+
+            try {
+                var canvas = document.createElement('canvas');
+                QRCode.toCanvas(canvas, qrContent, { width: 85, margin: 1, errorCorrectionLevel: 'L' }, function (error) {
+                    if (!error) { qrWrap.innerHTML = ''; qrWrap.appendChild(canvas); }
+                });
+            } catch(e) {}
+        });
+    });
+
+    // ==========================================================
+    // 基础功能：导出 JSON（升级版：支持直接导出内存中的库存数据）
+    // ==========================================================
+    document.getElementById('exportJsonBtn').addEventListener('click', function() {
+        // 1. 优先判断“基础功能”里录入的数据
+        let exportInventory = [];
+        if (currentData.length > 0) {
+            exportInventory = currentData;
+        } else if (inventoryData.length > 0) {
+            // 2. 如果基础功能没录入，则直接从已经读取的“库存管理”数据中拿
+            exportInventory = inventoryData;
+        }
+
+        // 3. 如果两者都没有数据，则报错拦截
+        if (exportInventory.length === 0) {
+            alert("❌ 没有可导出的库存数据！\n请先在【基础功能】录入物料，或确保目录下有 data.json 且已读取成功。");
+            return;
+        }
+
+        // 4. 合并库存 + 工单，下载 JSON
+        const combinedData = { inventory: exportInventory, work_orders: workOrders };
+        const jsonString = JSON.stringify(combinedData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'data.json';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert("✅ 组合数据包已导出！请将此文件替换到 Vercel 或本地文件夹。");
+    });
+
+    // ==========================================================
+    // 基础功能：导出 Excel
+    // ==========================================================
+    document.getElementById('exportExcelBtn').addEventListener('click', function() {
+        const cards = document.querySelectorAll('.card');
+        if (cards.length === 0) return alert("请先生成数据！");
+        if (typeof ExcelJS === 'undefined' || typeof saveAs === 'undefined') { return alert("导出组件加载失败！"); }
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('物料清单');
+        worksheet.showGridLines = false;
+        const qrPixelSize = 450, marginX = 5, marginTop = 5, marginBottom = 5, gap = 2, textAreaHeight = 80;
+        const totalWidth = qrPixelSize + (marginX * 2);
+        const totalHeight = marginTop + qrPixelSize + gap + textAreaHeight + marginBottom;
+        worksheet.getColumn(1).width = 67;
+        let rowIndex = 1;
+        cards.forEach((card, index) => {
+            const canvas = card.querySelector('.card-qr canvas');
+            const barcodeText = card.querySelector('.card-barcode-text').innerText;
+            if (!canvas) return;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = totalWidth; tempCanvas.height = totalHeight;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, totalWidth, totalHeight);
+            ctx.drawImage(canvas, marginX, marginTop, qrPixelSize, qrPixelSize);
+            ctx.fillStyle = '#303133'; ctx.font = 'bold 22px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText(barcodeText, totalWidth / 2, qrPixelSize + marginTop + gap);
+            const mergedBase64 = tempCanvas.toDataURL('image/png');
+            const row = worksheet.getRow(rowIndex); row.height = totalHeight * 1;
+            const imageId = workbook.addImage({ base64: mergedBase64, extension: 'png' });
+            worksheet.addImage(imageId, { tl: { col: 0, row: rowIndex - 1 }, ext: { width: totalWidth, height: totalHeight } });
+            rowIndex += 1;
+        });
+        workbook.xlsx.writeBuffer().then(function(buffer) { const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); saveAs(blob, '物料条码排版清单.xlsx'); });
+    });
+
+    document.getElementById('printBtn').addEventListener('click', function() {
+        const container = document.getElementById('resultContainer');
+        const printContainer = document.getElementById('printContainer');
+        const cards = container.querySelectorAll('.card');
+        if (cards.length === 0) return alert("请先生成数据！");
+        printContainer.innerHTML = '';
+        cards.forEach(card => {
+            const itemWrap = document.createElement('div');
+            itemWrap.style.cssText = 'display: flex; flex-direction: column; align-items: center; width: 40mm; page-break-inside: avoid;';
+            const qrCanvas = card.querySelector('.card-qr canvas');
+            if(qrCanvas) { const img = document.createElement('img'); img.src = qrCanvas.toDataURL('image/png'); img.style.cssText = 'width: 30mm !important; height: 30mm !important;'; itemWrap.appendChild(img); }
+            const barcodeTextNode = card.querySelector('.card-barcode-text');
+            if (barcodeTextNode) { const textEl = document.createElement('div'); textEl.innerText = barcodeTextNode.innerText; textEl.style.cssText = 'font-size: 16px; font-weight: 900; text-align:center; margin-top: 0px; line-height: 1.1;'; itemWrap.appendChild(textEl); }
+            printContainer.appendChild(itemWrap);
+        });
+        setTimeout(() => window.print(), 300);
+    });
+
+    // ==========================================================
+    // 库存管理
+    // ==========================================================
+    async function loadInventoryData() {
+        const wrapper = document.getElementById('inventoryTableWrapper');
+        wrapper.innerHTML = '<div style="text-align:center; padding:30px; color:#909399;">⏳ 正在读取库存数据...</div>';
+        try {
+            const response = await fetch('./data.json');
+            if (!response.ok) throw new Error('文件读取失败');
+            const fullData = await response.json();
+            inventoryData = fullData.inventory || fullData; 
+            workOrders = fullData.work_orders || [];
+
+            if (!Array.isArray(inventoryData) || inventoryData.length === 0) {
+                wrapper.innerHTML = '<div style="text-align:center; padding:30px; color:#909399;">📭 暂无库存数据，请先通过“基础功能”录入。</div>';
+                return;
+            }
+            renderInventoryTable(inventoryData);
+        } catch (error) {
+            wrapper.innerHTML = `<div style="color:#f56c6c; text-align:center; padding:30px;">❌ 加载失败：${error.message}</div>`;
+        }
+    }
+
+    function renderInventoryTable(dataToRender) {
+        const wrapper = document.getElementById('inventoryTableWrapper');
+        let tableHtml = `
+            <table class="inv-table">
+                <thead>
+                    <tr>
+                        <th style="width:45px; text-align:center;"><input type="checkbox" id="selectAllCheckbox" onclick="toggleAllCheckboxes(this)"></th>
+                        <th style="width:60px;">序号</th>
+                        <th>采购</th>
+                        <th>入库日期</th>
+                        <th>入库编号</th>
+                        <th>料号</th>
+                        <th>料品名称</th>
+                        <th>规格型号</th>
+                        <th>供应商</th>
+                        <th style="width:80px;">数量</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        dataToRender.forEach((item, index) => {
+            const inboundNo = item['入库编号'] || '-';
+            tableHtml += `
+                <tr>
+                    <td style="width:45px; text-align:center;"><input type="checkbox" class="row-checkbox" data-inbound="${inboundNo}"></td>
+                    <td style="width:60px;">${index + 1}</td>
+                    <td>${item['采购'] || '-'}</td>
+                    <td>${item['入库日期'] || '-'}</td>
+                    <td style="font-weight:bold; color:#409eff;">${inboundNo}</td>
+                    <td>${item['料号'] || '-'}</td>
+                    <td>${item['料品名称'] || '-'}</td>
+                    <td>${item['规格型号'] || '-'}</td>
+                    <td>${item['供应商.名称'] || '-'}</td>
+                    <td style="width:80px;">${item['实收数量'] || '-'}</td>
+                </tr>
+            `;
+        });
+        tableHtml += `</tbody></table>`;
+        wrapper.innerHTML = tableHtml;
+    }
+
+    function toggleAllCheckboxes(source) { const checkboxes = document.querySelectorAll('.row-checkbox'); checkboxes.forEach(checkbox => checkbox.checked = source.checked); }
+    function applyFilter() {
+        const keyword = document.getElementById('filterInput').value.trim().toLowerCase();
+        if (!keyword) { renderInventoryTable(inventoryData); return; }
+        const filtered = inventoryData.filter(item => String(item['入库编号'] || '').toLowerCase().includes(keyword) || String(item['料号'] || '').toLowerCase().includes(keyword) || String(item['料品名称'] || '').toLowerCase().includes(keyword));
+        if (filtered.length === 0) { document.getElementById('inventoryTableWrapper').innerHTML = `<div style="text-align:center; padding:30px; color:#909399;">🔍 未搜索到匹配“${keyword}”的物料。</div>`; } else { renderInventoryTable(filtered); }
+    }
+    function clearFilter() { document.getElementById('filterInput').value = ''; renderInventoryTable(inventoryData); }
+
+    // 打印所选（不带页脚，简单版）
+    function printSelectedItems() {
+        const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+        if (checkboxes.length === 0) { alert('请至少勾选一条物料！'); return; }
+        const selectedData = [];
+        checkboxes.forEach(cb => { const inboundNo = cb.getAttribute('data-inbound'); if (inboundNo) { const item = inventoryData.find(d => d['入库编号'] === inboundNo); if (item) selectedData.push(item); } });
+        if (selectedData.length === 0) { alert('未找到对应的物料数据！'); return; }
+        const outQtyInput = prompt(`共勾选 ${selectedData.length} 条物料，请输入本次实际领用数量：`, "1");
+        if (outQtyInput === null) return;
+        const outQty = parseInt(outQtyInput);
+        if (isNaN(outQty) || outQty <= 0) { alert("请输入有效的整数！"); return; }
+
+        const now = new Date().toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        let printHtml = `
+            <div class="print-wrap"><table class="print-table"><thead>
+                <tr><td colspan="7" style="border:none !important; padding:0 !important;"><div class="print-header"><img src="logo.png" alt="logo" class="logo"><div class="title">📋 物料领用清单</div><span class="date">打印时间：${now}</span></div></td></tr>
+                <tr><th style="width:50px;">序号</th><th>入库编号</th><th>料号</th><th>料品名称</th><th>规格型号</th><th>供应商</th><th style="width:80px;">领用数量</th></tr>
+            </thead><tbody>`;
+        selectedData.forEach((item, idx) => { printHtml += `<tr><td style="text-align:center;">${idx + 1}</td><td>${item['入库编号'] || ''}</td><td>${item['料号'] || ''}</td><td>${item['料品名称'] || ''}</td><td>${item['规格型号'] || ''}</td><td>${item['供应商.名称'] || ''}</td><td style="text-align:center; font-weight:bold; font-size:16px;">${outQty}</td></tr>`; });
+        printHtml += `</tbody><tfoot><tr><td colspan="7" style="border:none !important; padding-top:15px !important;"><div class="print-footer"><div class="f-item">打印：</div><div class="f-center">仓库：</div><div class="f-right">领用人：</div></div></td></tr></tfoot></table></div>`;
+        const printContainer = document.getElementById('tablePrintContainer');
+        printContainer.innerHTML = printHtml;
+        setTimeout(() => {
+            window.print();
+        }, 300);
+        setTimeout(() => { printContainer.innerHTML = ''; }, 1000);
+    }
+
+    // ==========================================================
+    // 工单管理：渲染、搜索筛选
+    // ==========================================================
+    function loadWorkOrderData() {
+        loadInventoryData().then(() => { renderWorkOrders(); });
+    }
+
+    // 渲染工单列表（支持传入过滤后的数组）
+    function renderWorkOrders(dataToRender = null) {
+        const wrapper = document.getElementById('workOrderListWrapper');
+        // 如果没有传入过滤数据，则使用全局的 workOrders
+        const list = dataToRender || workOrders;
+        
+        if (!list || list.length === 0) {
+            wrapper.innerHTML = '<div style="text-align:center; padding:30px; color:#909399;">暂无工单，点击上方按钮新建。</div>';
+            return;
+        }
+        let html = `<table class="inv-table"><thead><tr><th>工单编号</th><th>创建时间</th><th>物料总数</th><th>状态</th><th>操作</th></tr></thead><tbody>`;
+        list.forEach((order) => {
+            const statusColor = order.status === 'completed' ? '#67c23a' : '#e6a23c';
+            const statusText = order.status === 'completed' ? '✅ 已完成' : '⏳ 待领料';
+            html += `
+                <tr>
+                    <td style="font-weight:bold; color:#409eff;">${order.id}</td>
+                    <td>${order.createdAt || '-'}</td>
+                    <td>${order.items ? order.items.length : 0} 种</td>
+                    <td style="color:${statusColor}; font-weight:bold;">${statusText}</td>
+                    <td>
+                        <button onclick="printWorkOrder('${order.id}')" style="background:#67c23a; color:#fff; border:none; border-radius:4px; padding:4px 12px; cursor:pointer; font-size:12px;">🖨️ 打印领料单</button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += `</tbody></table>`;
+        wrapper.innerHTML = html;
+    }
+
+    // 应用工单筛选
+    function applyWoFilter() {
+        const keyword = document.getElementById('woFilterInput').value.trim().toLowerCase();
+        if (!keyword) {
+            renderWorkOrders();
+            return;
+        }
+        // 筛选：只匹配工单号
+        const filtered = workOrders.filter(item => 
+            String(item.id || '').toLowerCase().includes(keyword)
+        );
+        renderWorkOrders(filtered);
+    }
+
+    // 清除工单筛选
+    function clearWoFilter() {
+        document.getElementById('woFilterInput').value = '';
+        renderWorkOrders();
+    }
+
+    function openCreateWorkOrderModal() {
+        // 确保库存数据存在
+        if (inventoryData.length === 0) { alert("库存为空，请先点击【库存管理】刷新数据，或者录入库存！"); return; }
+        let modalHtml = `
+            <div id="createWoModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:9999;">
+                <div style="background:#fff; border-radius:12px; padding:25px; width:90%; max-width:900px; max-height:80vh; display:flex; flex-direction:column;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid #ebeef5; padding-bottom:15px; margin-bottom:15px;">
+                        <h4 style="margin:0;">创建领料工单</h4>
+                        <button onclick="document.getElementById('createWoModal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer;">✕</button>
+                    </div>
+                    <div style="flex:1; overflow-y:auto;">
+                        <table class="inv-table">
+                            <thead><tr><th>入库编号</th><th>料品名称</th><th>库存数量</th><th style="width:100px;">领用数量</th></tr></thead>
+                            <tbody>
+        `;
+        inventoryData.forEach(item => {
+            modalHtml += `
+                <tr>
+                    <td style="font-weight:bold; color:#409eff;">${item['入库编号'] || '-'}</td>
+                    <td>${item['料品名称'] || '-'}</td>
+                    <td>${item['实收数量'] || '-'}</td>
+                    <td><input type="number" min="0" value="0" class="wo-qty-input" data-inbound="${item['入库编号']}" style="width:80px; padding:4px; border:1px solid #dcdfe6; border-radius:4px; text-align:center;"></td>
+                </tr>
+            `;
+        });
+        modalHtml += `</tbody></table></div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #ebeef5; padding-top:15px; margin-top:15px;">
+                        <button onclick="document.getElementById('createWoModal').remove()" style="padding:8px 20px; border:1px solid #dcdfe6; background:#fff; border-radius:4px; cursor:pointer;">取消</button>
+                        <button onclick="confirmCreateWorkOrder()" style="padding:8px 20px; background:#409eff; color:#fff; border:none; border-radius:4px; cursor:pointer;">确认生成</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function confirmCreateWorkOrder() {
+        const inputs = document.querySelectorAll('.wo-qty-input');
+        const items = [];
+        inputs.forEach(input => {
+            const qty = parseInt(input.value);
+            if (qty > 0) {
+                const inboundNo = input.getAttribute('data-inbound');
+                items.push({ inboundNo: inboundNo, qty: qty });
+            }
+        });
+        if (items.length === 0) { alert("请至少输入一种物料的有效领用数量！"); return; }
+                const now = new Date();
+        // 1. 生成 8 位日期前缀 (例如 20260811)
+        const datePrefix = now.getFullYear() + 
+                           String(now.getMonth() + 1).padStart(2, '0') + 
+                           String(now.getDate()).padStart(2, '0');
+        
+        // 2. 统计今天已经生成了多少个工单，自动加 1
+        const todayOrders = workOrders.filter(o => o.id && o.id.startsWith(datePrefix));
+        // 3. 补足 3 位流水号 (001, 002, ...)
+        const seq = String(todayOrders.length + 1).padStart(3, '0');
+        
+        const idStr = datePrefix + seq;
+        const newOrder = { id: idStr, createdAt: now.toLocaleString('zh-CN'), status: 'pending', items: items };
+        workOrders.push(newOrder);
+        document.getElementById('createWoModal').remove();
+        renderWorkOrders();
+        alert(`✅ 工单 ${idStr} 已生成！\n💡 请点击【导出 data.json】下载最新配置文件，并上传到服务器。`);
+    }
+    // ==========================================================
+    // 🖨️ 打印指定工单的领料单
+    // ==========================================================
+    function printWorkOrder(orderId) {
+        // 1. 找到对应的工单
+        const order = workOrders.find(o => o.id === orderId);
+        if (!order) {
+            alert("未找到该工单！");
+            return;
+        }
+
+        // 2. 生成物料表格数据
+        let tableRows = '';
+        order.items.forEach((item, index) => {
+            // 从库存中找到该物料的详细信息
+            const invItem = inventoryData.find(d => d['入库编号'] === item.inboundNo);
+            tableRows += `
+                <tr>
+                    <td style="text-align:center;">${index + 1}</td>
+                    <td>${item.inboundNo}</td>
+                    <td>${invItem ? invItem['料号'] : '-'}</td>
+                    <td>${invItem ? invItem['料品名称'] : '-'}</td>
+                    <td>${invItem ? invItem['规格型号'] : '-'}</td>
+                    <td style="text-align:center; font-weight:bold;">${item.qty}</td>
+                </tr>
+            `;
+        });
+
+        // 3. 拼接打印 HTML（复用你之前的排版 CSS）
+        const now = new Date().toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        let printHtml = `
+            <div class="print-wrap">
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <td colspan="6" style="border:none !important; padding:0 !important;">
+                                <div class="print-header">
+                                    <img src="logo.png" alt="logo" class="logo">
+                                    <div class="title">📋 工单领料清单</div>
+                                    <span class="date" style="line-height: 1.8;">
+                                        工单号：<span style="font-weight:bold; color:#303133;">${order.id}</span><br>
+                                        打印时间：${now}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th style="width:50px;">序号</th>
+                            <th>入库编号</th>
+                            <th>料号</th>
+                            <th>料品名称</th>
+                            <th>规格型号</th>
+                            <th style="width:80px;">领用数量</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" style="border:none !important; padding-top:15px !important;">
+                                <div class="print-footer">
+                                    <div class="f-item">打印：</div>
+                                    <div class="f-center">仓库：</div>
+                                    <div class="f-right">领用人：</div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+
+        // 4. 利用现有的容器渲染并调用打印
+        const printContainer = document.getElementById('tablePrintContainer');
+        printContainer.innerHTML = printHtml;
+        setTimeout(() => {
+            window.print();
+        }, 300);
+        setTimeout(() => { printContainer.innerHTML = ''; }, 1000);
+    }
+</script>
+</body>
+</html>

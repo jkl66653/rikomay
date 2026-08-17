@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>物料信息详情</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .container { max-width: 480px; width: 100%; background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.08); overflow: hidden; position: relative; min-height: 600px; display: flex; flex-direction: column;}
+        .header { background: linear-gradient(135deg, #409EFF 0%, #67C23A 100%); padding: 30px 20px 40px; text-align: center; color: white; position: relative; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;}
+        .header .logo-img { max-height: 50px; width: auto; margin-bottom: 15px; object-fit: contain; }
+        .header h1 { font-size: 20px; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+        .header p { font-size: 13px; opacity: 0.8; }
+        .detail-card { margin: -35px 20px 20px; background: #fff; border-radius: 16px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); flex: 1;}
+        .detail-item { display: flex; border-bottom: 1px solid #f5f7fa; padding: 15px 0; }
+        .detail-item:last-child { border-bottom: none; }
+        .detail-label { width: 90px; color: #909399; font-size: 14px; flex-shrink: 0; }
+        .detail-value { flex: 1; color: #303133; font-size: 14px; font-weight: 500; word-break: break-all; }
+        .tag { display: inline-block; background: #ecf5ff; color: #409eff; padding: 2px 10px; border-radius: 4px; font-size: 12px; font-weight: normal; margin-left: 5px; }
+        .loading { text-align: center; color: #909399; padding: 40px; font-size: 14px; }
+        .not-found { color: #f56c6c; text-align: center; padding: 30px; }
+
+        #mobileLockOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 999; border-radius: 20px;}
+        .lock-box { background: #fff; padding: 30px; border-radius: 16px; text-align: center; width: 85%; max-width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .lock-box h2 { margin-bottom: 8px; color: #333; font-size: 18px; }
+        .lock-box p { font-size: 13px; color: #909399; margin-bottom: 15px; }
+        .lock-box input { width: 100%; padding: 12px; border: 1px solid #dcdfe6; border-radius: 8px; font-size: 16px; outline: none; text-align: center; letter-spacing: 8px; }
+        .lock-box input:focus { border-color: #409eff; }
+        .lock-box button { width: 100%; margin-top: 15px; padding: 12px; background: #409eff; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        .lock-box button:active { background: #66b1ff; transform: scale(0.98); }
+
+        .action-area { padding: 10px 20px 20px; display: none; flex-direction: column; gap: 10px; }
+        .action-btn { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn-scan-again { background: #409eff; color: #fff; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; flex: 1; box-shadow: 0 4px 10px rgba(64,158,255,0.3); }
+        .btn-pick { background: #67c23a; color: #fff; border: none; padding: 12px 30px; border-radius: 30px; font-size: 16px; cursor: pointer; flex: 1; box-shadow: 0 4px 10px rgba(103,194,58,0.3); }
+
+        #scanArea { display: none; text-align: center; padding: 10px 20px 20px; }
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 12px; overflow: hidden; background: #000; }
+        .scan-prompt { text-align: center; padding: 40px 20px; color: #909399; }
+        .scan-prompt h3 { font-size: 18px; margin-bottom: 10px; color: #333; }
+        .scanning-fullscreen { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; background: #000 !important; z-index: 99999 !important; border-radius: 0 !important; display: flex !important; justify-content: center !important; align-items: center !important; }
+        .scanning-fullscreen #reader { max-width: 100% !important; width: 100% !important; height: 100% !important; border-radius: 0 !important; margin: 0 !important; }
+        .scanning-fullscreen .scan-prompt { display: none !important; }
+        .scanning-fullscreen .scan-cancel-btn { position: absolute !important; bottom: 40px !important; left: 50% !important; transform: translateX(-50%) !important; padding: 12px 40px !important; border: none !important; border-radius: 30px !important; background: #ffffff !important; color: #333 !important; font-size: 16px !important; cursor: pointer !important; z-index: 100000 !important; font-weight: 500 !important; box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important; }
+        #fileInput { display: none; }
+                /* ===== 自定义领料模态框 ===== */
+        #pickModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px);
+            display: none; justify-content: center; align-items: center;
+            z-index: 99999;
+        }
+        #pickModal .pick-box {
+            background: #fff; border-radius: 16px; padding: 25px;
+            width: 88%; max-width: 380px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        #pickModal .pick-title {
+            font-size: 18px; font-weight: 600; text-align: center;
+            margin-bottom: 20px; color: #303133;
+        }
+        #pickModal .pick-label {
+            display: block; font-size: 14px; color: #606266;
+            margin-bottom: 6px; font-weight: 500;
+        }
+        #pickModal .pick-input {
+            width: 100%; padding: 10px 12px; border: 1px solid #dcdfe6;
+            border-radius: 8px; font-size: 15px; box-sizing: border-box;
+            margin-bottom: 16px; outline: none; transition: 0.2s;
+        }
+        #pickModal .pick-input:focus { border-color: #409eff; }
+        #pickModal .pick-actions {
+            display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px;
+        }
+        #pickModal .btn-cancel {
+            padding: 8px 20px; background: #fff; border: 1px solid #dcdfe6;
+            border-radius: 8px; color: #606266; cursor: pointer; font-size: 14px;
+        }
+        #pickModal .btn-confirm {
+            padding: 8px 20px; background: #409eff; border: none;
+            border-radius: 8px; color: #fff; cursor: pointer; font-size: 14px;
+        }
+        #pickModal .btn-confirm:active { background: #66b1ff; transform: scale(0.98); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="mobileLockOverlay">
+        <div class="lock-box">
+            <h2>🔐 身份验证</h2>
+            <p>请输入访问密码查看物料详情</p>
+            <input type="password" id="mobilePwdInput" placeholder="请输入密码" onkeydown="if(event.key==='Enter') checkMobilePassword()">
+            <button onclick="checkMobilePassword()">确 认</button>
+        </div>
+    </div>
+
+    <div id="mainContent">
+        <div class="header">
+            <img src="logo.png" class="logo-img" alt="公司Logo">
+            <h1>📦 物料详情追溯</h1>
+            <p>基于入库编号追溯</p>
+        </div>
+        <div id="detailContainer" class="detail-card"><div class="loading">正在解析物料数据...</div></div>
+        
+        <div id="actionArea" class="action-area">
+            <div class="action-btn">
+                <button class="btn-scan-again" onclick="startScanner()">📷 再扫一次</button>
+                <button class="btn-pick" onclick="openPickModal()">📦 我要领料</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scanArea">
+        <div id="reader"></div>
+        <div class="scan-prompt"><h3>📷 请在摄像头前对准二维码</h3><p style="margin-top:10px; color:#f56c6c;">(注意：必须使用 HTTPS 协议)</p></div>
+        <button class="scan-cancel-btn" onclick="stopScanner()">取消</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*">
+</div>
+    <!-- 🟢 自定义领料模态框 -->
+    <div id="pickModal">
+        <div class="pick-box">
+            <div class="pick-title">📦 确认领料</div>
+            <label class="pick-label">工单号</label>
+            <input type="text" id="modalWoId" class="pick-input" placeholder="请输入工单号">
+            <label class="pick-label">领用数量</label>
+            <input type="number" id="modalQty" class="pick-input" min="1" placeholder="输入领用数量">
+            <!-- 🟢 新增：领用人输入框 -->
+            <label class="pick-label">领用人</label>
+            <input type="text" id="modalPicker" class="pick-input" placeholder="请输入领用人姓名">
+            <div class="pick-actions">
+                <button class="btn-cancel" onclick="closePickModal()">取消</button>
+                <button class="btn-confirm" onclick="confirmPickSubmit()">确认领料</button>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+    // ==========================================================
+    // 基础配置与数据
+    // ==========================================================
+    const ACCESS_PASSWORD = '9527'; 
+    const AUTH_TOKEN_KEY = 'app_material_auth_token';
+    let ALL_INVENTORY = []; 
+    let WORK_ORDERS = [];
+    let currentScannedItem = null;
+    let pickedSet = new Set(); // 记录该工单已领物料
+
+    function checkAuthStatus() {
+        const isAuth = localStorage.getItem(AUTH_TOKEN_KEY);
+        if (isAuth === 'true') {
+            document.getElementById('mobileLockOverlay').style.display = 'none';
+            loadMaterialData(); 
+        } else {
+            document.getElementById('mobilePwdInput').focus();
+        }
+    }
+
+    function checkMobilePassword() {
+        const inputPwd = document.getElementById('mobilePwdInput').value.trim();
+        if (inputPwd === ACCESS_PASSWORD) {
+            localStorage.setItem(AUTH_TOKEN_KEY, 'true');
+            document.getElementById('mobileLockOverlay').style.display = 'none';
+            loadMaterialData(); 
+        } else { alert('❌ 密码错误！'); document.getElementById('mobilePwdInput').value = ''; document.getElementById('mobilePwdInput').focus(); }
+    }
+
+    async function loadMaterialData() {
+        const container = document.getElementById('detailContainer');
+        try {
+            const response = await fetch('./data.json');
+            if (!response.ok) throw new Error(`无法加载数据文件`);
+            const fullData = await response.json();
+            ALL_INVENTORY = fullData.inventory || fullData;
+            WORK_ORDERS = fullData.work_orders || [];
+
+            const params = new URLSearchParams(window.location.search);
+            let keyCol = '', keyVal = '';
+            for (let [k, v] of params.entries()) { if (k !== 'empty') { keyCol = k; keyVal = v; break; } }
+            
+            if (!keyVal) {
+                // 没带二维码参数时，检测是否有待领工单主动提醒用户
+                const pendingOrders = WORK_ORDERS.filter(o => o.status === 'pending');
+                if (pendingOrders.length > 0) {
+                    container.innerHTML = `<div style="text-align:center; padding:40px 20px;">
+                        <div style="font-size:40px; margin-bottom:15px;">📋</div>
+                        <h3 style="color:#333;">发现 ${pendingOrders.length} 张待处理工单</h3>
+                        <p style="color:#909399; margin-top:10px;">请扫描物料二维码，领取对应工单物料</p>
+                    </div>`;
+                    document.getElementById('actionArea').style.display = 'none';
+                    return;
+                }
+                container.innerHTML = `<div class="not-found">请扫码进入</div>`;
+                document.getElementById('actionArea').style.display = 'block';
+                return;
+            }
+            renderMaterialByParams(keyCol, keyVal);
+
+        } catch (error) {
+            container.innerHTML = `<div class="not-found"><b>⚠️ 数据加载失败</b><br><br>原因: ${error.message}</div>`;
+        }
+    }
+
+    function renderMaterialByParams(keyCol, keyVal) {
+        const container = document.getElementById('detailContainer');
+        let foundRow = ALL_INVENTORY.find(item => String(item[keyCol]) === String(keyVal));
+        currentScannedItem = foundRow || null;
+
+        let html = '';
+        if (foundRow) {
+            const displayFields = [ { key: '入库日期', label: '入库日期' }, { key: '入库编号', label: '入库编号', isTag: true }, { key: '料号', label: '料号' }, { key: '料品名称', label: '料品名称' }, { key: '规格型号', label: '规格型号' }, { key: '供应商.名称', label: '供应商名称' }, { key: '实收数量', label: '实收数量' } ];
+            displayFields.forEach(field => {
+                let val = foundRow[field.key] || "";
+                if (val) {
+                    let valHtml = `<span class="detail-value">${val}`;
+                    if (field.isTag) valHtml += `<span class="tag">唯一标识</span>`;
+                    valHtml += `</span>`;
+                    html += `<div class="detail-item"><div class="detail-label">${field.label}</div>${valHtml}</div>`;
+                }
+            });
+            container.innerHTML = html || `<div class="not-found">该物料未配置详细信息。</div>`;
+        } else {
+            container.innerHTML = `<div class="detail-item"><div class="detail-label">唯一标识</div><div class="detail-value">${keyVal}</div></div>`;
+        }
+
+        document.getElementById('actionArea').style.display = 'flex';
+    }
+
+    // ==========================================================
+    // 扫码逻辑
+    // ==========================================================
+    let html5QrCode = null; let isScanning = false; 
+
+    function startScanner() {
+        if (isScanning) return;
+        document.getElementById('mainContent').style.display = 'none';
+        const scanArea = document.getElementById('scanArea');
+        scanArea.style.display = 'block';
+        scanArea.className = 'scanning-fullscreen';
+
+        if (html5QrCode) { try { html5QrCode.stop(); } catch(e) {} try { html5QrCode.clear(); } catch(e) {} html5QrCode = null; }
+        html5QrCode = new Html5Qrcode("reader");
+        let boxSize = Math.min(window.innerWidth, window.innerHeight) * 0.90;
+        boxSize = Math.min(boxSize, 600);
+        const config = { fps: 15, qrbox: { width: boxSize, height: boxSize }, format: "canvas", videoConstraints: { facingMode: "environment", advanced: [{ focusMode: "continuous" }] } };
+        html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+            .catch(err => { alert("❌ 摄像头启动失败！"); stopScanner(); });
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        if (navigator.vibrate) { navigator.vibrate(150); }
+        document.getElementById('detailContainer').innerHTML = `<div style="color:#67c23a; text-align:center; font-size:18px; font-weight:bold; padding:30px;">✅ 识别成功！</div>`;
+        stopScanner();
+        try {
+            let keyCol = '', keyVal = '';
+            if (!decodedText.startsWith('http')) { alert("⚠️ 二维码不包含系统地址。"); return; }
+            const urlObj = new URL(decodedText);
+            const params = new URLSearchParams(urlObj.search);
+            for (let [k, v] of params.entries()) { if (k !== 'empty') { keyCol = k; keyVal = v; break; } }
+            if (keyVal) { renderMaterialByParams(keyCol, keyVal); } else { alert("参数提取失败"); }
+        } catch (error) { alert("解析出错！"); } finally { isScanning = false; }
+    }
+
+    function onScanFailure(err) { }
+
+    function stopScanner() {
+        const scanArea = document.getElementById('scanArea');
+        scanArea.className = ''; scanArea.style.display = 'none';
+        document.getElementById('mainContent').style.display = 'flex'; document.getElementById('mainContent').style.flexDirection = 'column';
+        if (html5QrCode) { try { html5QrCode.stop(); } catch(e) {} try { html5QrCode.clear(); } catch(e) {} }
+        isScanning = false;
+    }
+
+    document.getElementById('fileInput').addEventListener('change', async function(e) {
+        const file = e.target.files[0]; if (!file) return;
+        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+        try { const result = await html5QrCode.scanFromFile(file); onScanSuccess(result); } catch (err) { alert("❌ 相册图片解析失败！"); } finally { document.getElementById('fileInput').value = ''; }
+    });
+
+    // ==========================================================
+    // 🟢 新逻辑：强制校验工单号的领料流程
+    // ==========================================================
+        // ==========================================================
+    // 🟢 1. 打开领料模态框
+    // ==========================================================
+    function openPickModal() {
+        if (!currentScannedItem) {
+            alert("请先扫码加载物料数据！");
+            return;
+        }
+        // 清空输入框，显示模态框
+        document.getElementById('modalWoId').value = '';
+        document.getElementById('modalQty').value = '';
+        document.getElementById('pickModal').style.display = 'flex';
+    }
+
+    // ==========================================================
+    // 🟢 2. 关闭领料模态框
+    // ==========================================================
+    function closePickModal() {
+        document.getElementById('pickModal').style.display = 'none';
+    }
+
+        // ==========================================================
+    // 🟢 3. 提交领料（【重磅修复】支持跨页面/跨扫码的进度保存）
+    // ==========================================================
+    function confirmPickSubmit() {
+        // 1. 获取输入值
+        const woId = document.getElementById('modalWoId').value.trim();
+        const qtyVal = parseInt(document.getElementById('modalQty').value);
+        const pickerName = document.getElementById('modalPicker').value.trim();
+
+        // 2. 基础格式校验
+        if (!woId) { alert("⚠️ 请填写完整的工单号！"); return; }
+        if (isNaN(qtyVal) || qtyVal <= 0) { alert("⚠️ 请输入有效的领用数量！"); return; }
+        if (!pickerName) { alert("⚠️ 请填写领用人姓名！"); return; }
+
+        // 3. 验证工单
+        const targetOrder = WORK_ORDERS.find(o => o.id === woId && o.status === 'pending');
+        if (!targetOrder) {
+            alert("❌ 校验失败！请输入正确的、待处理的领料工单号。");
+            return;
+        }
+        
+        targetOrder.pickerName = pickerName;
+
+        // 4. 验证物料是否在工单中
+        const currentInboundNo = currentScannedItem['入库编号'];
+        const itemInOrder = targetOrder.items.find(item => item.inboundNo === currentInboundNo);
+        if (!itemInOrder) {
+            alert("⚠️ 当前物料不在此工单的领料清单中，请核对工单内容后重试。");
+            return;
+        }
+
+        // 5. 验证数量是否与工单匹配
+        if (qtyVal !== itemInOrder.qty) {
+            alert("❌ 数量校验失败！实际领用数量必须与工单要求数量完全一致，请重新输入。");
+            return;
+        }
+
+        // ✅ 6. 校验通过，标记已领（【核心修复：持久化保存到 localStorage】）
+        const storageKey = `wo_picked_${targetOrder.id}`;
+        // 从浏览器本地读取之前已经领过的料号列表
+        let currentPicked = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        // 如果当前物料还没领过，加进去
+        if (!currentPicked.includes(currentInboundNo)) {
+            currentPicked.push(currentInboundNo);
+        }
+        // 重新写入浏览器本地存储
+        localStorage.setItem(storageKey, JSON.stringify(currentPicked));
+        // 同步更新内存中的 Set 集合
+        pickedSet = new Set(currentPicked);
+
+        const itemName = currentScannedItem['料品名称'] || '-';
+        const itemSpec = currentScannedItem['规格型号'] || '-';
+        alert(`✅ 领料成功！\n\n入库编号：${currentInboundNo}\n名称：${itemName}\n规格：${itemSpec}\n数量：${qtyVal} 件`);
+
+        // 关闭弹窗
+        closePickModal();
+
+        // 7. 检查工单是否全部完成
+        const allPicked = targetOrder.items.every(item => pickedSet.has(item.inboundNo));
+        if (allPicked) {
+            // 🟢 工单全部领完，更新内存状态
+            WORK_ORDERS = WORK_ORDERS.map(o => o.id === targetOrder.id ? { ...o, status: 'completed', pickerName: targetOrder.pickerName } : o);
+            
+            // 🟢 工单完成，清除本地存储的进度防止浪费空间
+            localStorage.removeItem(storageKey);
+
+            // 构建完成界面（保留你之前写好的界面渲染代码）
+            let itemListHtml = targetOrder.items.map(item => {
+                const invItem = ALL_INVENTORY.find(d => d['入库编号'] === item.inboundNo);
+                return `
+                    <div class="detail-item">
+                        <div class="detail-label">入库编号</div>
+                        <div class="detail-value" style="color:#409eff; font-weight:bold;">${item.inboundNo}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">料号</div>
+                        <div class="detail-value">${invItem ? invItem['料号'] : '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">名称</div>
+                        <div class="detail-value">${invItem ? invItem['料品名称'] : '-'}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">规格型号</div>
+                        <div class="detail-value">${invItem ? invItem['规格型号'] : '-'}</div>
+                    </div>
+                    <div class="detail-item" style="border-bottom: 1px solid #f5f7fa;">
+                        <div class="detail-label">领用数量</div>
+                        <div class="detail-value" style="font-weight:bold;">${item.qty}</div>
+                    </div>
+                    <div style="height: 30px; margin-bottom: 5px;"></div>
+                `;
+            }).join('');
+
+            document.getElementById('detailContainer').innerHTML = `
+                <div style="width:100%;">
+                    <div class="detail-item" style="border-bottom: 2px solid #67c23a; padding-bottom: 15px; margin-bottom: 15px;">
+                        <div class="detail-label">状态</div>
+                        <div class="detail-value" style="color:#67c23a; font-weight:bold; font-size:18px;">✅ 工单已全部领完</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">工单号</div>
+                        <div class="detail-value" style="color:#409eff; font-weight:bold;">${targetOrder.id}</div>
+                    </div>
+                    <div class="detail-item" style="border-bottom: 1px solid #f5f7fa;">
+                        <div class="detail-label">领用人</div>
+                        <div class="detail-value" style="font-weight:bold;">${targetOrder.pickerName || '-'}</div>
+                    </div>
+                    ${itemListHtml}
+                    <div style="margin-top: 30px; text-align:center;">
+                        <button onclick="location.reload()" style="padding:12px 40px; border:none; border-radius:30px; background:#409eff; color:#fff; font-size:16px; cursor:pointer; width:100%; box-shadow: 0 4px 10px rgba(64,158,255,0.3);">继续扫码</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('actionArea').style.display = 'none';
+        }
+    }
+
+    // 🟢 4. 抽离出来的完成逻辑（你把之前 if(allPicked) 里面的代码放到这个函数里）
+    function handleOrderComplete(targetOrder) {
+        // 复制你之前写的 if(allPicked) 生成 itemListHtml 和 innerHTML 的代码即可
+        // 这样代码就整洁了。
+        // 如果你需要，我也可以直接把完整的完成逻辑包在下面。
+        // 为了方便，我建议你把之前写的成功界面放这里：
+        let itemListHtml = targetOrder.items.map(item => {
+            const invItem = ALL_INVENTORY.find(d => d['入库编号'] === item.inboundNo);
+            return `
+                <div class="detail-item">
+                    <div class="detail-label">入库编号</div>
+                    <div class="detail-value" style="color:#409eff; font-weight:bold;">${item.inboundNo}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">料号</div>
+                    <div class="detail-value">${invItem ? invItem['料号'] : '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">名称</div>
+                    <div class="detail-value">${invItem ? invItem['料品名称'] : '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">规格型号</div>
+                    <div class="detail-value">${invItem ? invItem['规格型号'] : '-'}</div>
+                </div>
+                <div class="detail-item" style="border-bottom: 1px solid #f5f7fa;">
+                    <div class="detail-label">领用数量</div>
+                    <div class="detail-value" style="font-weight:bold;">${item.qty}</div>
+                </div>
+                <div style="height: 30px; margin-bottom: 5px;"></div>
+            `;
+        }).join('');
+
+        document.getElementById('detailContainer').innerHTML = `
+            <div style="width:100%;">
+                <div class="detail-item" style="border-bottom: 2px solid #67c23a; padding-bottom: 15px; margin-bottom: 15px;">
+                    <div class="detail-label">状态</div>
+                    <div class="detail-value" style="color:#67c23a; font-weight:bold; font-size:18px;">✅ 工单已全部领完</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">工单号</div>
+                    <div class="detail-value" style="color:#409eff; font-weight:bold;">${targetOrder.id}</div>
+                </div>
+                <div class="detail-item" style="border-bottom: 1px solid #f5f7fa;">
+                    <div class="detail-label">领用人</div>
+                    <div class="detail-value" style="font-weight:bold;">${targetOrder.pickerName || '-'}</div>
+                </div>
+                ${itemListHtml}
+                <div style="margin-top: 30px; text-align:center;">
+                    <button onclick="location.reload()" style="padding:12px 40px; border:none; border-radius:30px; background:#409eff; color:#fff; font-size:16px; cursor:pointer; width:100%; box-shadow: 0 4px 10px rgba(64,158,255,0.3);">继续扫码</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('actionArea').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() { checkAuthStatus(); });
+</script>
+</body>
+</html>
